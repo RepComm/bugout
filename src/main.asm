@@ -11,39 +11,37 @@ org 0x7c00
 
 ; move the stack a little further away from us
 ; have to set base pointer register, normal registers or literals don't work here
-mov bp, 0x8000
+mov bp, 0x9000
 ; stack pointer set to base pointer
 mov sp, bp
 
 ; write a hello world message
-mov bx, msg_hello
+mov bx, real_mode_hello
 call print
 
-; read from disk
-; bx = where to read it into
-mov bx, 0x9000
-; dh = how many sectors to read
-mov dh, 2 ; read 2 sectors
-call disk_load
-; disk_load puts the data into memory at bx
+call boot32
+jmp $ ; infiniloop - doesn't actual execute, as boot32 jumps over it
 
-; print from first sector
-call print
-
-; print from second sector
-mov bx, 0x9000 + 512
-call print
-
-jmp $ ; infiniloop
-
-; must include here, not above, as we are in
-; the boot sector, and including above would
+; must include here, not above, as including above would
 ; run the code directly without us calling it
-include "common/print.asm"
-include "common/disk.asm"
+include "boot/print.asm"
+include "boot/gdt.asm"
+include "common/vga.asm"
+include "common/boot32.asm"
 
-msg_hello:
+; tell assembler to treat as 32bit code
+use32
+
+; boot32 function jumps to this label, so this is where the kernel official starts
+BEGIN_32_MODE:
+  mov ebx, boot32_mode_hello
+  call vga_print_cstr
+  jmp $
+
+real_mode_hello:
   db '----Bugout OS----', 0
+boot32_mode_hello:
+  db "32bit protected mode has now booted", 0
 
 ; bootsector needs 55AA at the end (in little endian)
 ; this fills with zeroes, and writes the magic value
@@ -53,9 +51,7 @@ dw 0xaa55
 ; ---- END SECTOR 1 (boot sector)
 ; ---- BEGIN SECTOR 2 (kernel)
 
-times 128 dw 0x6869 ; hihihihi...
-times 128 dw 0x0000 ; so print stops reading
-times 128 dw 0x6c6f ; lolololol...
-times 128 dw 0x0000 ; so print stops reading..
+; times 256 dw 0x0000
+; times 256 dw 0x0000
 
 ; ---- END SECTOR 2 (kernel)
